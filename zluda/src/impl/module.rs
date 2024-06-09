@@ -1,5 +1,5 @@
 use std::{
-    collections::hash_map, collections::HashMap, ffi::c_void, ffi::CStr, ffi::CString, mem,
+    env,collections::hash_map, collections::HashMap, ffi::c_void, ffi::CStr, ffi::CString, mem,
     os::raw::c_char, ptr, slice,
 };
 
@@ -11,6 +11,9 @@ use super::{
 };
 use ptx;
 
+use spirv_tools_sys::{
+    spv_binary, spv_endianness_t, spv_parsed_instruction_t, spv_result_t, spv_target_env,
+};
 pub type Module = LiveCheck<ModuleData>;
 
 impl HasLivenessCookie for ModuleData {
@@ -70,6 +73,29 @@ impl SpirvModule {
         let mut errors = Vec::new();
         let ast = ptx::ModuleParser::new().parse(&mut errors, ptx_text)?;
         let spirv_module = ptx::to_spirv_module(ast)?;
+        // enable spirv text dumper when export ENABLE_SPIRV_DUMPER=1
+        if env::var("ENABLE_SPIRV_DUMPER").is_ok() {
+            let spv_context =
+            unsafe { spirv_tools::spvContextCreate(spv_target_env::SPV_ENV_UNIVERSAL_1_3) };
+            let spv_from_ptx_binary = spirv_module.assemble();
+            let mut spv_text: spirv_tools::spv_text = ptr::null_mut();
+            let result = unsafe {
+                spirv_tools::spvBinaryToText(
+                    spv_context,
+                    spv_from_ptx_binary.as_ptr(),
+                    spv_from_ptx_binary.len(),
+                    (spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_INDENT | spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_NO_HEADER |  spirv_tools::spv_binary_to_text_options_t::SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES).0,
+                    &mut spv_text as *mut _,
+                    ptr::null_mut()
+                )
+            };
+            // Convert the C-style string to a Rust &str
+            let c_str = unsafe { CStr::from_ptr((*spv_text).str_) };
+            let str_slice: &str = c_str.to_str().expect("Failed to convert CStr to &str");
+
+            // Print the Rust &str
+            println!("{}", str_slice);
+        }
         Ok(SpirvModule {
             binaries: spirv_module.assemble(),
             kernel_info: spirv_module.kernel_info,

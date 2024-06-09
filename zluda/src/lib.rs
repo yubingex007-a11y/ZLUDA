@@ -1,5 +1,6 @@
 extern crate level_zero as l0;
 extern crate level_zero_sys as l0_sys;
+extern crate spirv_tools_sys as spirv_tools;
 #[macro_use]
 extern crate lazy_static;
 #[cfg(test)]
